@@ -9,10 +9,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # 这里是核心插件，确保格式对齐
   cupertino_icons: ^1.0.8
   flutter_inappwebview: ^6.0.0
   permission_handler: ^11.3.0
+  # 新增这个强大的视频处理库 (full版本支持更多协议)
+  ffmpeg_kit_flutter_full_gpl: ^6.0.3
+  # 用于获取文件保存路径
+  path_provider: ^2.1.2
+  # 用于把视频存入相册
+  gal: ^2.3.0
 
 dev_dependencies:
   flutter_test:
