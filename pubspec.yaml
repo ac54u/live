@@ -9,17 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # 图标库
   cupertino_icons: ^1.0.8
-  # 网页浏览器核心
   flutter_inappwebview: ^6.0.0
-  # 权限管理
   permission_handler: ^11.3.0
-  # 【关键修改】换成 https_gpl 版本，修复打包报错，体积更小更稳定
+  # 【关键修复】使用 https_gpl 版本，功能一样但能下载成功
   ffmpeg_kit_flutter_https_gpl: ^6.0.3
-  # 路径获取
   path_provider: ^2.1.2
-  # 相册保存
   gal: ^2.3.0
 
 dev_dependencies:
