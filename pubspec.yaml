@@ -9,11 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^1.0.2
   flutter_inappwebview: ^6.0.0
   permission_handler: ^11.3.0
-  # 【关键修复】使用 https_gpl 版本，功能一样但能下载成功
-  ffmpeg_kit_flutter_https_gpl: ^6.0.3
+  # 【绝对关键】降级到 5.1.0，这是云端打包最不容易报错的版本
+  ffmpeg_kit_flutter_https_gpl: 5.1.0
   path_provider: ^2.1.2
   gal: ^2.3.0
 
