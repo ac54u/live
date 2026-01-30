@@ -1,32 +1,22 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
-// 【注意】这里是 5.1.0 版本的引用方式，和 6.0 不一样，千万别改回去了
-import 'package:ffmpeg_kit_flutter_https_gpl/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_https_gpl/return_code.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:gal/gal.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await [
-    Permission.camera,
-    Permission.microphone,
-    Permission.photos,
-    Permission.storage,
-    Permission.manageExternalStorage
-  ].request();
+  await [Permission.camera, Permission.microphone].request();
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Pro Live Recorder',
+      title: 'Live Sniffer',
       theme: ThemeData.dark(),
       home: const LivePage(),
     );
@@ -42,14 +32,13 @@ class LivePage extends StatefulWidget {
 
 class _LivePageState extends State<LivePage> {
   final String targetUrl = "https://zh.stripchat.com";
-  // 5.1.0 版本同样需要伪装 UA
+  // 必须保留 UA 伪装，否则无法嗅探到手机版的高清流
   final String userAgentStr =
       "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
   String? detectedStreamUrl;
   int currentQualityScore = 0;
-  bool isRecording = false;
-  String statusText = "等待直播源 (v5.1.0 稳定版)...";
+  String statusText = "正在分析网页，寻找直播源...";
 
   @override
   Widget build(BuildContext context) {
@@ -65,22 +54,23 @@ class _LivePageState extends State<LivePage> {
                 allowsInlineMediaPlayback: true,
                 javaScriptEnabled: true,
                 domStorageEnabled: true,
-                useShouldInterceptRequest: true,
+                useShouldInterceptRequest: true, // 开启嗅探
                 userAgent: userAgentStr,
                 allowsPictureInPictureMediaPlayback: true,
               ),
+              // --- 核心嗅探逻辑 ---
               shouldInterceptRequest: (controller, request) async {
                 String url = request.url.toString();
                 if (url.contains(".m3u8")) {
                   int newScore = _getQualityScore(url);
+                  // 只有遇到更好的画质才更新
                   if (newScore > currentQualityScore) {
-                    // 使用 addPostFrameCallback 避免构建时刷新 UI
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) {
                         setState(() {
                           detectedStreamUrl = url;
                           currentQualityScore = newScore;
-                          statusText = "已锁定画质: ${_getQualityLabel(newScore)}";
+                          statusText = "已捕获最高画质: ${_getQualityLabel(newScore)}";
                         });
                       }
                     });
@@ -89,8 +79,12 @@ class _LivePageState extends State<LivePage> {
                 return null;
               },
             ),
+            
+            // --- 底部操作栏 ---
             Positioned(
-              bottom: 20, left: 20, right: 20,
+              bottom: 20,
+              left: 20,
+              right: 20,
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -101,24 +95,31 @@ class _LivePageState extends State<LivePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(statusText,
+                        style: TextStyle(
+                            color: _getScoreColor(currentQualityScore),
+                            fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildButton(
-                          icon: Icons.fiber_manual_record,
-                          color: Colors.redAccent,
-                          text: "开始录制",
-                          onTap: (detectedStreamUrl != null && !isRecording) ? _startRecording : null,
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        // 只有抓到链接才允许点击
+                        onPressed: detectedStreamUrl != null
+                            ? () {
+                                Clipboard.setData(
+                                    ClipboardData(text: detectedStreamUrl!));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("✅ 直播源链接已复制！去服务器下载吧！")));
+                              }
+                            : null,
+                        icon: const Icon(Icons.copy),
+                        label: const Text("复制直播源链接 (发送给服务器)"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        _buildButton(
-                          icon: Icons.stop_circle_outlined,
-                          color: isRecording ? Colors.white : Colors.grey,
-                          text: "停止保存",
-                          onTap: isRecording ? _stopRecording : null,
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -139,61 +140,15 @@ class _LivePageState extends State<LivePage> {
   }
 
   String _getQualityLabel(int score) {
-    if (score >= 100) return "🌟 原画";
+    if (score >= 100) return "🌟 原画 (Source)";
     if (score >= 90) return "🔥 1080p";
     if (score >= 80) return "✅ 720p";
     return "📺 标清";
   }
 
-  Widget _buildButton({required IconData icon, required Color color, required String text, VoidCallback? onTap}) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: onTap != null ? color : Colors.white24, size: 32),
-          const SizedBox(height: 4),
-          Text(text, style: TextStyle(color: onTap != null ? Colors.white : Colors.white24, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  void _startRecording() async {
-    if (detectedStreamUrl == null) return;
-    setState(() { isRecording = true; statusText = "🔴 录制中... (请保持前台)"; });
-    
-    final dir = await getApplicationDocumentsDirectory();
-    final outputPath = "${dir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.mp4";
-
-    // 5.1.0 版本的命令格式完全一样
-    String command = '-headers "Referer: https://zh.stripchat.com/" -headers "User-Agent: $userAgentStr" -i "$detectedStreamUrl" -c copy -y "$outputPath"';
-
-    FFmpegKit.executeAsync(command, (session) async {
-      final returnCode = await session.getReturnCode();
-      if (ReturnCode.isSuccess(returnCode) || ReturnCode.isCancel(returnCode)) {
-        _saveToGallery(outputPath);
-      } else {
-        setState(() { statusText = "❌ 录制失败 (可能是网络问题)"; isRecording = false; });
-      }
-    });
-  }
-
-  void _stopRecording() {
-    FFmpegKit.cancel();
-    setState(() { isRecording = false; statusText = "正在保存..."; });
-  }
-
-  void _saveToGallery(String path) async {
-    try {
-      File file = File(path);
-      if (await file.exists() && await file.length() > 10000) {
-        await Gal.putVideo(path);
-        setState(() { statusText = "✅ 已保存到相册！"; });
-      } else {
-        setState(() { statusText = "⚠️ 视频太短或无效"; });
-      }
-    } catch (e) {
-      setState(() { statusText = "保存出错: $e"; });
-    }
+  Color _getScoreColor(int score) {
+    if (score >= 90) return Colors.purpleAccent;
+    if (score >= 80) return Colors.greenAccent;
+    return Colors.white70;
   }
 }

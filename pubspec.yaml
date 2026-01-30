@@ -9,13 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.2
+  # 只保留最基础的图标和浏览器插件
+  cupertino_icons: ^1.0.8
   flutter_inappwebview: ^6.0.0
   permission_handler: ^11.3.0
-  # 【绝对关键】降级到 5.1.0，这是云端打包最不容易报错的版本
-  ffmpeg_kit_flutter_https_gpl: 5.1.0
-  path_provider: ^2.1.2
-  gal: ^2.3.0
+  # 移除了所有导致 404 的 ffmpeg/gal 库
 
 dev_dependencies:
   flutter_test:
