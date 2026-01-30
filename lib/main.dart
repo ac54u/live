@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Ultimate Sniffer',
+      title: 'Smart Reconstructor',
       theme: ThemeData.dark(),
       home: const LivePage(),
     );
@@ -33,28 +33,13 @@ class LivePage extends StatefulWidget {
 
 class _LivePageState extends State<LivePage> {
   final String targetUrl = "https://zh.stripchat.com";
-  // 强力伪装：模拟最新的 iPhone Safari
   final String userAgentStr =
       "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 
   InAppWebViewController? webViewController;
   String? detectedStreamUrl;
-  String statusText = "初始化嗅探器...";
-  List<String> logs = []; // 调试日志
-  Timer? _jsTimer;
-
-  @override
-  void dispose() {
-    _jsTimer?.cancel();
-    super.dispose();
-  }
-
-  // 添加日志到屏幕
-  void _addLog(String msg) {
-    if (logs.length > 5) logs.removeAt(0); // 只保留最近5条
-    logs.add(msg);
-    if (mounted) setState(() {});
-  }
+  String statusText = "初始化... (请点击网页播放按钮)";
+  List<String> logs = [];
 
   @override
   Widget build(BuildContext context) {
@@ -63,80 +48,71 @@ class _LivePageState extends State<LivePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. 浏览器区域 (占用剩余空间)
             Expanded(
-              child: InAppWebView(
-                initialUrlRequest: URLRequest(url: WebUri(targetUrl)),
-                initialSettings: InAppWebViewSettings(
-                  mediaPlaybackRequiresUserGesture: false,
-                  allowsInlineMediaPlayback: true,
-                  javaScriptEnabled: true,
-                  domStorageEnabled: true,
-                  userAgent: userAgentStr,
-                  allowsPictureInPictureMediaPlayback: true,
-                  // 关键：允许资源加载监听
-                  useOnLoadResource: true, 
-                ),
-                onWebViewCreated: (controller) {
-                  webViewController = controller;
-                  // 启动 JS 暴力轮询
-                  _startJsSniffer();
-                },
-                // --- 方案 A: 网络层被动监听 (比拦截更稳) ---
-                onLoadResource: (controller, resource) {
-                  String url = resource.url.toString();
-                  _checkUrl(url, "网络层");
-                },
-              ),
-            ),
-
-            // 2. 底部控制台 (显示抓取结果)
-            Container(
-              height: 180,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                border: const Border(top: BorderSide(color: Colors.white24)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  // 状态标题
-                  Row(
-                    children: [
-                      Icon(
-                        detectedStreamUrl != null ? Icons.check_circle : Icons.radar,
-                        color: detectedStreamUrl != null ? Colors.green : Colors.orange,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          detectedStreamUrl != null ? "抓获目标！" : "全频道扫描中...",
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                      ),
-                    ],
+                  InAppWebView(
+                    initialUrlRequest: URLRequest(url: WebUri(targetUrl)),
+                    initialSettings: InAppWebViewSettings(
+                      mediaPlaybackRequiresUserGesture: false,
+                      allowsInlineMediaPlayback: true,
+                      javaScriptEnabled: true,
+                      domStorageEnabled: true,
+                      userAgent: userAgentStr,
+                      allowsPictureInPictureMediaPlayback: true,
+                      useOnLoadResource: true, // 开启监听
+                    ),
+                    onWebViewCreated: (controller) {
+                      webViewController = controller;
+                    },
+                    // --- 核心：既抓 m3u8，也抓 mp4 进行反推 ---
+                    onLoadResource: (controller, resource) {
+                      String url = resource.url.toString();
+                      _analyzeUrl(url);
+                    },
                   ),
-                  const Divider(color: Colors.white12),
-                  
-                  // 滚动日志区
-                  Expanded(
-                    child: ListView.builder(
-                      reverse: true, // 最新在最下
-                      itemCount: logs.length,
-                      itemBuilder: (context, index) {
-                        return Text(
-                          logs[index],
-                          style: const TextStyle(color: Colors.white54, fontSize: 10, fontFamily: 'monospace'),
-                        );
+                  // 刷新按钮 (如果没抓到，点这个重来)
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: IconButton(
+                      icon: const Icon(Icons.refresh, color: Colors.white, size: 30),
+                      onPressed: () {
+                        webViewController?.reload();
+                        setState(() {
+                          detectedStreamUrl = null;
+                          logs.clear();
+                          statusText = "已刷新页面，正在重新捕捉...";
+                        });
                       },
                     ),
                   ),
-
-                  const SizedBox(height: 10),
-                  
-                  // 复制按钮
+                ],
+              ),
+            ),
+            // 底部控制台
+            Container(
+              height: 200,
+              padding: const EdgeInsets.all(12),
+              color: Colors.grey[900],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(statusText,
+                      style: TextStyle(
+                          color: detectedStreamUrl != null ? Colors.greenAccent : Colors.orangeAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14)),
+                  const Divider(color: Colors.white24),
+                  Expanded(
+                    child: ListView.builder(
+                      reverse: true, // 最新的在最上面
+                      itemCount: logs.length,
+                      itemBuilder: (context, index) => Text(logs[index],
+                          style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -144,15 +120,12 @@ class _LivePageState extends State<LivePage> {
                           ? () {
                               Clipboard.setData(ClipboardData(text: detectedStreamUrl!));
                               ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("✅ 地址已复制！去服务器下载吧！")));
+                                  const SnackBar(content: Text("✅ m3u8 链接已复制！")));
                             }
                           : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: detectedStreamUrl != null ? Colors.green : Colors.grey[800],
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.copy),
-                      label: Text(detectedStreamUrl != null ? "复制直播源" : "暂未发现..."),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                      icon: const Icon(Icons.copy, color: Colors.white),
+                      label: const Text("复制 m3u8 链接", style: TextStyle(color: Colors.white)),
                     ),
                   ),
                 ],
@@ -164,56 +137,49 @@ class _LivePageState extends State<LivePage> {
     );
   }
 
-  // --- 方案 B: JS 暴力提取 (每秒执行一次) ---
-  void _startJsSniffer() {
-    _jsTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      if (webViewController == null) return;
+  void _analyzeUrl(String url) {
+    // 1. 如果直接抓到了 m3u8
+    if (url.contains(".m3u8") && !url.contains("master")) {
+      _lockTarget(url, "直接捕获");
+      return;
+    }
 
-      // 1. 尝试获取 <video> 标签的 src
-      String? videoSrc = await webViewController?.evaluateJavascript(source: """
-        (function() {
-          var v = document.querySelector('video');
-          if (v) return v.src;
-          return null;
-        })();
-      """);
-
-      if (videoSrc != null && videoSrc.isNotEmpty && videoSrc != "null") {
-        if (videoSrc.startsWith("blob:")) {
-           _addLog("⚠️ 发现 Blob 加密地址 (无法直接下载): $videoSrc");
-        } else {
-           _checkUrl(videoSrc, "JS提取");
+    // 2. 如果只抓到了 mp4，尝试“逆向推导”
+    // 你的 mp4 格式通常是: .../226683119_720p_h264_xxx.mp4
+    // 我们要把它变成: .../226683119_720p.m3u8
+    if (url.contains(".mp4") && url.contains("_h264_")) {
+      try {
+        // 逻辑：找到 "_h264_" 的位置，把后面全切掉，换成 ".m3u8"
+        int splitIndex = url.indexOf("_h264_");
+        if (splitIndex > 0) {
+          String guessedUrl = "${url.substring(0, splitIndex)}.m3u8";
+          _lockTarget(guessedUrl, "智能推导(从mp4)");
         }
+      } catch (e) {
+        // 忽略解析错误
       }
-    });
+    }
+    
+    // 记录日志 (只显示 mp4 和 m3u8)
+    if (url.contains(".mp4") || url.contains(".m3u8")) {
+      if (logs.length > 20) logs.removeAt(0);
+      String cleanUrl = url.split('/').last; // 只显示文件名
+      logs.add("扫描: $cleanUrl");
+      if (mounted) setState(() {});
+    }
   }
 
-  // --- 统一检查逻辑 ---
-  void _checkUrl(String url, String source) {
-    // 过滤掉垃圾信息
-    if (url.contains("google") || url.contains("facebook") || url.contains("favicon")) return;
+  void _lockTarget(String url, String method) {
+    // 避免重复更新
+    if (detectedStreamUrl == url) return;
 
-    // 如果发现 m3u8 或者 flv
-    if (url.contains(".m3u8") || url.contains(".flv") || url.contains(".mp4")) {
-      // 避免重复刷新
-      if (detectedStreamUrl != url) {
-        
-        // 简单的画质判断（如果不含分辨率信息，也认为是源）
-        bool isBetter = false;
-        if (detectedStreamUrl == null) isBetter = true;
-        if (url.contains("720p") || url.contains("1080p") || url.contains("source")) isBetter = true;
+    // 优先保留 720p/1080p，忽略低画质
+    if (detectedStreamUrl != null && (url.contains("240p") || url.contains("480p"))) return;
 
-        if (isBetter) {
-          setState(() {
-            detectedStreamUrl = url;
-            _addLog("🚀 [$source] 锁定目标: ...${url.substring(url.length - 20)}");
-          });
-          print("抓取成功: $url");
-        }
-      }
-    } else {
-      // 偶尔打印一下普通链接证明在工作
-      if (logs.length < 2) _addLog("扫描: ...${url.length > 30 ? url.substring(url.length - 30) : url}");
-    }
+    setState(() {
+      detectedStreamUrl = url;
+      statusText = "✅ 成功获取链接 ($method)\n${url.split('/').last}";
+      logs.add(">>> 锁定目标: $url");
+    });
   }
 }
