@@ -5,7 +5,7 @@
 import FlutterMacOS
 import Foundation
 
-import ffmpeg_kit_flutter_full_gpl
+import ffmpeg_kit_flutter_https_gpl
 import flutter_inappwebview_macos
 import gal
 import path_provider_foundation

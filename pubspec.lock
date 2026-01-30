@@ -65,11 +65,11 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.5"
-  ffmpeg_kit_flutter_full_gpl:
+  ffmpeg_kit_flutter_https_gpl:
     dependency: "direct main"
     description:
-      name: ffmpeg_kit_flutter_full_gpl
-      sha256: "4f269bcb636bfcb544e5b4d65c706a3d311839970cb42638e72406410c1b5b7b"
+      name: ffmpeg_kit_flutter_https_gpl
+      sha256: "004d69b4fff606ff4289ca942df9ad42385868da55141ef2ee0cbbceaa4b7d9a"
       url: "https://pub.dev"
     source: hosted
     version: "6.0.3"
